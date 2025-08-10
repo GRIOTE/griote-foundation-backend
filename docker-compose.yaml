@@ -1,0 +1,61 @@
+
+services:
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"      
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: ./auth-service
+      dockerfile: Dockerfile
+    ports:
+      - "3001:3000"
+    env_file:
+      - ./auth-service/.env
+    depends_on:
+      - db-auth
+      - rabbitmq
+    restart: unless-stopped
+
+  profile-service:
+    build:
+      context: ./profile-service
+      dockerfile: Dockerfile
+    ports:
+      - "3002:3000"
+    env_file:
+      - ./profile-service/.env
+    depends_on:
+      - db-profile
+      - rabbitmq
+    restart: unless-stopped
+
+  db-auth:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: authuser
+      POSTGRES_PASSWORD: authpassword
+      POSTGRES_DB: authdb
+    volumes:
+      - db_auth_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  db-profile:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: profileuser
+      POSTGRES_PASSWORD: profilepassword
+      POSTGRES_DB: profiledb
+    volumes:
+      - db_profile_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+volumes:
+  db_auth_data:
+  db_profile_data:
