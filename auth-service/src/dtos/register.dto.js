@@ -1,10 +1,14 @@
 const Joi = require('joi');
 
-const schema = Joi.object({
+// Validation du payload d'inscription
+const registerSchema = Joi.object({
+  firstName: Joi.string().min(2).max(100).required(),
+  lastName: Joi.string().min(2).max(100).required(),
   email: Joi.string().email().required(),
-  password: Joi.string().required(),
+  password: Joi.string().min(8).required(),
+  profileType: Joi.string().valid('Student', 'Teacher', 'Independent').required(),
 });
 
 module.exports = {
-  validateLogin: (payload) => schema.validateAsync(payload)
+  validateRegister: (payload) => registerSchema.validateAsync(payload, { abortEarly: false }),
 };

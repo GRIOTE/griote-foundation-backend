@@ -1,14 +1,19 @@
 const nodemailer = require('nodemailer');
 const logger = require('../config/logger');
 
+// Configure un transport SMTP correct:
+// - secure=true pour SMTPS (465)
+// - secure=false pour STARTTLS (587)
+const secure = process.env.SMTP_SECURE === 'true';
+const defaultPort = secure ? 465 : 587;
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
-  port: parseInt(process.env.SMTP_PORT || '465', 10),
-  secure: process.env.SMTP_SECURE === 'true' || true,
-  auth: {
+  port: parseInt(process.env.SMTP_PORT || String(defaultPort), 10),
+  secure,
+  auth: process.env.SMTP_USER && process.env.SMTP_PASS ? {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
-  },
+  } : undefined,
 });
 
 async function sendVerificationEmail(to, token) {
@@ -21,12 +26,18 @@ async function sendVerificationEmail(to, token) {
   };
 
   try {
+    // Si le SMTP n'est pas configuré, on log et on n'échoue pas l'inscription
+    if (!process.env.SMTP_HOST) {
+      logger.warn('SMTP not configured. Skipping verification email send.');
+      return { skipped: true };
+    }
     const info = await transporter.sendMail(mail);
     logger.info('Verification email sent', { messageId: info.messageId, to });
     return info;
   } catch (err) {
-    logger.error('Failed to send verification email', err);
-    throw err;
+    // Ne pas bloquer le flux d'inscription pour un souci d'email
+    logger.warn('Failed to send verification email (non-blocking)', { error: err.message, to });
+    return { error: err.message };
   }
 }
 
