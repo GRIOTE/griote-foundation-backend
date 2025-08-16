@@ -2,8 +2,8 @@ const authService = require('../services/auth.service');
 const mailService = require('../services/mail.service');
 const { validateRegister } = require('../dtos/register.dto');
 const { validateLogin } = require('../dtos/login.dto');
+const { validateRequestPasswordReset, validateResetPassword } = require('../dtos/passwordReset.dto');
 const logger = require('../config/logger');
-
 async function register(req, res) {
   try {
     const payload = await validateRegister(req.body);

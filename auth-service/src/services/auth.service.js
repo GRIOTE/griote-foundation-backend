@@ -40,30 +40,52 @@ async function verifyEmailToken(token) {
 }
 
 async function login(email, password) {
-  const user = await User.findOne({ where: { email } });
-  if (!user) throw new Error('User not found');
-  if (!user.isVerified) throw new Error('Account not verified');
-  const ok = await comparePassword(password, user.password);
-  if (!ok) throw new Error('Invalid credentials');
+  try {
+    logger.debug('Tentative de connexion pour:', email);
+    
+    const user = await User.findOne({ where: { email } });
+    if (!user) {
+      logger.warn('Tentative de connexion avec email inexistant:', email);
+      throw new Error('Invalid credentials');
+    }
+    
+    if (!user.isVerified) {
+      logger.warn('Tentative de connexion avec compte non vérifié:', email);
+      throw new Error('Account not verified');
+    }
+    
+    logger.debug('Comparaison de mot de passe pour:', email);
+    const ok = await comparePassword(password, user.password);
+    
+    if (!ok) {
+      logger.warn('Mot de passe incorrect pour:', email);
+      throw new Error('Mot de passe Incorrect');
+    }
+    
+    logger.info('Connexion réussie pour:', email);
+    
+    const payload = { id: user.id, profileType: user.profileType };
+    const accessToken = signAccess(payload);
+    const refreshTokenStr = signRefresh(payload);
 
-  const payload = { id: user.id, profileType: user.profileType };
-  const accessToken = signAccess(payload);
-  const refreshTokenStr = signRefresh(payload);
+    const expires = new Date(Date.now() + (7*24*60*60*1000)); // 7d
+    await RefreshToken.create({ token: refreshTokenStr, userId: user.id, expiresAt: expires });
 
-  const expires = new Date(Date.now() + (7*24*60*60*1000)); // 7d
-  await RefreshToken.create({ token: refreshTokenStr, userId: user.id, expiresAt: expires });
-
-  return { accessToken, refreshToken: refreshTokenStr, user };
+    return { accessToken, refreshToken: refreshTokenStr, user };
+  } catch (error) {
+    logger.error('Erreur lors de la connexion:', error);
+    throw error;
+  }
 }
 
 async function generatePasswordResetToken(user) {
-  return tokenUtils.signEmail({ userId: user.id, type: 'PASSWORD_RESET' });
+  return signEmail({ userId: user.id, type: 'PASSWORD_RESET' });
 }
 
 async function resetPassword(token, newPassword) {
   let payload;
   try {
-    payload = tokenUtils.verify(token);
+    payload = verify(token);
   } catch {
     throw new Error('Invalid or expired token');
   }
@@ -72,7 +94,7 @@ async function resetPassword(token, newPassword) {
   const user = await User.findByPk(payload.userId);
   if (!user) throw new Error('User not found');
 
-  const hashed = await bcrypt.hash(newPassword, 10);
+  const hashed = await hashPassword(newPassword);
   user.password = hashed;
   await user.save();
 
@@ -100,4 +122,24 @@ async function revokeRefresh(token) {
   await RefreshToken.destroy({ where: { token } });
 }
 
-module.exports = { registerUser, generateEmailToken, verifyEmailToken, login, generatePasswordResetToken, resetPassword, refreshTokens, revokeRefresh };
+async function findUserByEmail(email) {
+  try {
+    const user = await User.findOne({ where: { email } });
+    return user;
+  } catch (error) {
+    logger.error('Error finding user by email:', error);
+    throw new Error('Error finding user');
+  }
+}
+
+module.exports = { 
+  registerUser, 
+  generateEmailToken, 
+  verifyEmailToken, 
+  login, 
+  generatePasswordResetToken, 
+  resetPassword, 
+  refreshTokens, 
+  revokeRefresh,
+  findUserByEmail
+};
